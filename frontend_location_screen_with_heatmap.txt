@@ -1,0 +1,141 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import { GoogleMap, Marker, useJsApiLoader, HeatmapLayer } from '@react-google-maps/api';
+
+const COLORS = {
+  primaryRed: '#D50032',
+  background: '#F7C6C7',
+  textDark: '#2C3E50',
+  textLight: '#FFFFFF',
+  lightGray: '#EAEAEA',
+  border: '#D1D1D1',
+};
+
+const containerStyle = {
+  width: '100%',
+  height: '100%',
+};
+
+const defaultCenter = {
+  lat: 20.5937, // Default to a central point in India
+  lng: 78.9629,
+};
+
+// Ensure 'visualization' is included for HeatmapLayer
+const libraries = ['places', 'visualization'];
+
+export default function LocationScreen() {
+  const [currentPosition, setCurrentPosition] = useState(null);
+  const [errorMsg, setErrorMsg] = useState(null);
+  const [approvedRequests, setApprovedRequests] = useState([]);
+  const [fetchError, setFetchError] = useState(null);
+
+  const { isLoaded, loadError } = useJsApiLoader({
+    googleMapsApiKey: "AIzaSyBgwsMPvt7eW-N1WvV12klUAGftQVL2sNU", // Your API key
+    libraries: libraries,
+  });
+
+  // Effect to get current user's geolocation
+  useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setCurrentPosition({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+          });
+        },
+        (error) => {
+          setErrorMsg(`Geolocation Error: ${error.message}`);
+        }
+      );
+    } else {
+      setErrorMsg("Geolocation is not supported by this browser.");
+    }
+  }, []);
+
+  // Effect to fetch approved blood requests from your backend
+  useEffect(() => {
+    const fetchApprovedRequests = async () => {
+      try {
+        const response = await fetch('http://localhost:3000/api/blood-requests');
+        if (!response.ok) {
+          throw new Error('Failed to fetch approved blood requests');
+        }
+        const data = await response.json();
+        // Filter out requests without valid lat/lng for heatmap
+        const validRequests = data.filter(req => req.latitude && req.longitude);
+        setApprovedRequests(validRequests);
+      } catch (err) {
+        setFetchError(err.message);
+      }
+    };
+
+    fetchApprovedRequests();
+  }, []);
+
+  const onLoad = useCallback(function callback(map) {
+    // You can do something with the map instance here if needed
+  }, []);
+
+  const onUnmount = useCallback(function callback(map) {
+    // This is called when the map is unmounted
+  }, []);
+
+  if (loadError) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-100">
+        <p className="text-red-500 text-lg">Error loading Google Maps: {loadError.message}</p>
+      </div>
+    );
+  }
+
+  if (!isLoaded) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-100">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-500 mx-auto"></div>
+          <p className="text-gray-700 text-lg mt-4">Loading Map...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (errorMsg || fetchError) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-100">
+        <p className="text-red-500 text-lg">{errorMsg || fetchError}</p>
+      </div>
+    );
+  }
+
+  // Transform approvedRequests into LatLng objects for HeatmapLayer
+  const heatmapData = approvedRequests.map(req => new window.google.maps.LatLng(req.latitude, req.longitude));
+
+  return (
+    <div className="flex-1 h-screen">
+      <GoogleMap
+        mapContainerStyle={containerStyle}
+        center={currentPosition || defaultCenter}
+        zoom={currentPosition ? 15 : 5} // Zoom in if current position is available
+        onLoad={onLoad}
+        onUnmount={onUnmount}
+      >
+        {currentPosition && (
+          <Marker
+            position={currentPosition}
+          />
+        )}
+
+        {isLoaded && heatmapData.length > 0 && (
+          <HeatmapLayer
+            data={heatmapData}
+            options={{
+              radius: 20, // Adjust radius as needed
+              opacity: 0.6, // Adjust opacity as needed
+            }}
+          />
+        )}
+      </GoogleMap>
+    </div>
+  );
+}

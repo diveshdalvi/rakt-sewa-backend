@@ -1,0 +1,120 @@
+import { useState, useEffect } from 'react';
+
+// This component can be placed in a file like `pages/admin/requests.js`
+
+const AdminRequestsPage = () => {
+  const [requests, setRequests] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  // Fetch all blood requests on component mount
+  useEffect(() => {
+    const fetchRequests = async () => {
+      try {
+        const response = await fetch('http://localhost:3000/api/admin/blood-requests');
+        if (!response.ok) {
+          throw new Error('Failed to fetch requests');
+        }
+        const data = await response.json();
+        setRequests(data);
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchRequests();
+  }, []);
+
+  // Function to handle the approval of a request
+  const handleApprove = async (requestId) => {
+    try {
+      const response = await fetch(`http://localhost:3000/api/admin/blood-requests/${requestId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ status: 'approved' }), // Set the new status
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to approve request');
+      }
+
+      // Update the status locally for an immediate UI update
+      setRequests(currentRequests =>
+        currentRequests.map(req =>
+          req.id === requestId ? { ...req, status: 'approved' } : req
+        )
+      );
+
+    } catch (err) {
+      // You might want to show a notification to the user here
+      console.error("Approval Error:", err.message);
+      alert(err.message);
+    }
+  };
+
+  if (loading) {
+    return <p>Loading requests...</p>;
+  }
+
+  if (error) {
+    return <p>Error: {error}</p>;
+  }
+
+  return (
+    <div style={{ padding: '2rem' }}>
+      <h1>Admin Panel - Approve Blood Requests</h1>
+      {requests.length > 0 ? (
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr>
+              <th style={tableHeaderStyle}>Requester Name</th>
+              <th style={tableHeaderStyle}>Blood Group</th>
+              <th style={tableHeaderStyle}>Location</th>
+              <th style={tableHeaderStyle}>Status</th>
+              <th style={tableHeaderStyle}>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {requests.map((request) => (
+              <tr key={request.id}>
+                <td style={tableCellStyle}>{request.requesterName || 'N/A'}</td>
+                <td style={tableCellStyle}>{request.bloodGroup || 'N/A'}</td>
+                <td style={tableCellStyle}>{request.location || 'N/A'}</td>
+                <td style={tableCellStyle}>{request.status || 'N/A'}</td>
+                <td style={tableCellStyle}>
+                  {request.status === 'pending' ? (
+                    <button onClick={() => handleApprove(request.id)}>
+                      Approve
+                    </button>
+                  ) : (
+                    <span style={{ color: 'green', fontWeight: 'bold' }}>Approved</span>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : (
+        <p>No blood requests found.</p>
+      )}
+    </div>
+  );
+};
+
+// Basic styling
+const tableHeaderStyle = {
+  borderBottom: '2px solid #000',
+  textAlign: 'left',
+  padding: '8px',
+};
+
+const tableCellStyle = {
+  borderBottom: '1px solid #ddd',
+  padding: '8px',
+};
+
+export default AdminRequestsPage;
